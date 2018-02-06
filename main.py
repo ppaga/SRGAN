@@ -68,21 +68,20 @@ def main(_):
     g_content_scaling = FLAGS.content_scaling
     g_perception_scaling = FLAGS.perception_scaling
     d_lr_scale = FLAGS.discriminator_lr_scale    
-
-#    with tf.device('/GPU:0'):
+    
+    ## forcing it to use the GPU only runs into memory issues on my machine    
+    # with tf.device('/GPU:0'):
     ##========================= DEFINE MODEL ===========================##
     HR_images = tf.placeholder(tf.float32, [FLAGS.batch_size, FLAGS.HR_size, FLAGS.HR_size, FLAGS.c_dim], name='HR_images')
     LR_images =  tf.placeholder(tf.float32, [FLAGS.batch_size, FLAGS.LR_size, FLAGS.LR_size, FLAGS.c_dim], name='LR_images')
-    
-#   HR_images =  tf.placeholder(tf.float32, [FLAGS.batch_size, FLAGS.HR_size, FLAGS.HR_size, FLAGS.c_dim], name='HR_images')
 
-    # gen for training
+    # generator for training
     generator, _ = model.generator(LR_images, is_train=True, reuse=False)
     # generated fake images --> discriminator
     discriminator_fake = model.discriminator(generator.outputs, is_train=True, reuse=False)
     # real images --> discriminator
     discriminator_real = model.discriminator(HR_images, is_train=True, reuse=True)
-    # sample_z --> gen for evaluation, set is_train to False so that BatchNormLayer behave differently
+    # generator for sample generation, set is_train to False so that BatchNormLayer behave differently
     sample_gen, naive_upscaler = model.generator(LR_images, is_train=False, reuse=True)
     # the result of a basic upsampling is generated for reference
     upscaled_image = naive_upscaler.outputs
@@ -102,7 +101,7 @@ def main(_):
     # adversarial generator loss: try to make the the fake images look real (1)
     g_loss_adversarial = tl.cost.sigmoid_cross_entropy(df_logits, tf.ones_like(df_logits), name='gfake')
     
-#    build the VGG perception loss
+    # builds the VGG perception loss detailed in original paper
     vgg = vgg_loss([128,128,3])
     with tf.variable_scope("perception", reuse = False):
         tl.layers.set_name_reuse(False)
@@ -115,9 +114,7 @@ def main(_):
     features_real = perception_output.outputs
     features_gen = perception_output_gen.outputs
     g_loss_perception = vgg.loss(features_real, features_gen)
-
     g_loss = g_loss_adversarial/g_perception_scaling + g_loss_perception
-    
     
     # list of generator and discriminator variables for use by the optimizers
     g_vars = tl.layers.get_variables_with_name('generator', True, False)
@@ -156,11 +153,9 @@ def main(_):
     saver = tf.train.Saver(g_vars+d_vars)
         
     with tf.Session() as sess:
-    
         tl.layers.initialize_global_variables(sess)    
 
         # generates the various folders in case they don't already exist, starting with the run directory
-
         run_dir = './runs/'+FLAGS.run_name+'/'    
         checkpoint_dir = run_dir+'checkpoints/'
         sample_dir = run_dir+'samples/'
@@ -197,7 +192,7 @@ def main(_):
         # creates the image pipeline
         data_preproc = data_preprocessing(path,shape)
 
-#        sets the parameters for saving the sample images
+        # sets the parameters for saving the sample images
         batchsize = FLAGS.batch_size
         n_display_0 = int(np.sqrt(batchsize))+1
         n_display_1 = batchsize//n_display_0+1
@@ -206,7 +201,7 @@ def main(_):
         naming_offset = FLAGS.naming_offset
         iter_counter = naming_offset*FLAGS.updates
         
-#        saves the reference images
+        # saves the reference images
         HR_sample, LR_sample = data_preproc.batch(batchsize = batchsize, single_image=False)
         up_img = sess.run(upscaled_image, feed_dict={LR_images : LR_sample, HR_images: HR_sample})
         tl.visualize.save_images(up_img, [n_display_0, n_display_1+1], '{}train_LR.png'.format(sample_dir))
@@ -217,10 +212,10 @@ def main(_):
             for update in range(FLAGS.updates):
                 start_time = time.time()
                 
-    #            generate low and high-resolution image batch:
+                # generate low and high-resolution image batch:
                 HR_batch, LR_batch = data_preproc.batch(batchsize = batchsize, single_image=False)
 
-    #            train the network and generate summary statistics for tensorboard
+                # train the network and generate summary statistics for tensorboard
                 summary,_,_ = sess.run([merged,g_optim, d_optim], feed_dict={LR_images: LR_batch, HR_images: HR_batch })
                 print("Epoch: [%2d/%2d] [%3d/%3d]" % (epoch+naming_offset, FLAGS.epoch+naming_offset, update, FLAGS.updates))
                 writer.add_summary(summary, iter_counter)

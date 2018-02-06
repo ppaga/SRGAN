@@ -20,6 +20,7 @@ flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 flags.DEFINE_string("checkpoint_dir", None, "checkpoints directory path [None]")
 flags.DEFINE_string("sample_path", "./upscaled_image", "path to save the upscaled image [./upscaled_image]")
 flags.DEFINE_string("image_path", "./image", "path to the image to be upscaled [./image]")
+flags.DEFINE_boolean("save_reference", False, "if the reference upscaling is to be saved [False]"
 FLAGS = flags.FLAGS
 
 def image_SR(image, batch_size, sess, generator, NU, LR_images):
@@ -64,22 +65,21 @@ def main(_):
     saver = tf.train.Saver(g_vars)
     
     image_path = FLAGS.image_path
-    
     image = imread(images_path)
     image = 2*(image.astype(float)/255.) - 1
+    
+    sample_path = FLAGS.sample_path
     
     with tf.Session() as sess: 
         tl.layers.initialize_global_variables(sess)    
         # load the latest checkpoints
         if tl.files.file_exists(checkpoint_dir+'checkpoint'):
             saver.restore(sess,tf.train.latest_checkpoint(checkpoint_dir))
-        print('generator model loaded')
-            
-        path = FLAGS.data_dir
+        print('generator model loaded')    
         upscaled_image, naive_upscaled = image_SR(image_list, batch_size, sess, generator, naive_upscaling, LR_images)
-            tl.visualize.save_image(upscaled_images, './images/upscaled'+str(i)+'.png')
-            tl.visualize.save_image(naive_upscaled, './images/naive'+str(i)+'.png')
-            tl.visualize.save_image(image_list, './images/original'+str(i)+'.png')
+        tl.visualize.save_image(upscaled_images, sample_path+'.png')
+        if FLAGS.save_reference:
+            tl.visualize.save_image(unaive_upscaled, sample_path+'reference.png')
 
 if __name__ == '__main__':
     tf.app.run()

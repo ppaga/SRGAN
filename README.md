@@ -9,7 +9,11 @@ The network itself is mostly faithful to the original, but the number of channel
 python main.py
 on the command line, and there are a number of optional arguments described in main.py using tensorflow flags (e.g. initial learning rate etc). Once the training starts, the checkpoints will be in ./checkpoints, the tensorboard logs in ./logs, and some sample images will be generated in ./samples. The samples come with their reference low-resolution images (the image which is passed to the network) as training_LR, and their high-resolution reference (the image which the network is trying to reconstruct).
 
+## How to use the trained network
+The file SR.py is used to generate upscaled version of images of arbitrary size. To do this, it divides the original image into overlapping patches, upscales those patches, and adds them back into an upscaled picture. By default, it assumes the image to be upscaled is in the same directory as SR.py and is called 'image', but you can pass a different path as an option. It requires you to pass the checkpoint directory of the model you want to use as an argument, i.e. it needs to be called as
+python SR.py --checkpoint_dir='your path'
+since it needs to load the model from there. Also, it still needs to be tested.
+
 ## What is yet to be done
-- There is a limited functionality to test out the network on user-provided images in the file SR.py, but basically it still needs to be implemented.
-- At current I'm using a fixed and fairly steep decay which halves the learning rate every 1e3 updates. I need to implement a more flexible way of doing things (i.e. I need to create another flag for the decay rate)
-- I need to post results.
+- finish training
+- post pretty pictures.

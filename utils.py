@@ -1,17 +1,19 @@
 import numpy as np
 from tensorlayer.prepro import crop
+import tensorflow as tf
 from matplotlib.pyplot import imshow, imread
 
 from glob import glob
 import random
 
-from skimage.transform import rescale
+from keras.applications import vgg19
+import gc
+
 
 class data_preprocessing():
-    def __init__(self, path, shape, num_channels = 3, factor = 4, images = None):
+    def __init__(self, path, shape, num_channels = 3, images = None):
         self.shape = np.array(shape)
         self.channels = num_channels
-        self.factor = factor
         self.path = path
         self.glob = None
         print('image directory: '+path)
@@ -26,11 +28,8 @@ class data_preprocessing():
             image = imread(image_path)
             if len(image.shape)==3 and np.min(image.shape[:2])>np.min(self.shape):
                 images.append(image)
-        factor = self.factor
         HR_size = np.insert(np.append(self.shape, self.channels),0,batchsize)
-        LR_size = np.insert(np.append(self.shape//factor, self.channels),0,batchsize)
         HR_batch = np.zeros(HR_size)
-        LR_batch = np.zeros(LR_size)
         if single_image == False:
             image_set = random.sample(images, batchsize)
         else:
@@ -41,30 +40,52 @@ class data_preprocessing():
             else:
                 HR_crop = crop(image.astype(float), self.shape[0], self.shape[1], is_random=True)
             HR_batch[i,:,:,:] = HR_crop
-            LR_batch[i,:,:,:] = rescale(HR_crop, .25, mode = 'constant')
-
         HR_batch = 2*(HR_batch.astype(float)/255.) - 1
-        LR_batch = 2*(LR_batch.astype(float)/255.) - 1
         
-        return HR_batch, LR_batch
+        return HR_batch
 
-def image_SR(n_images, path):
-    LR_dim = 32
-    paths = glob(path + '/*.jpg')
-    images_paths = random.sample(paths, n_images)
-    images = []
-    for i in range(n_images):
-        image_path = np.random.choice(images_paths)
-        image = imread(image_path)
-        image = 2*(image.astype(float)/255.) - 1
+class vgg_net():
+    def __init__(self, shape):
+        vgg_model = vgg19.VGG19(include_top=False,input_shape=shape)
+        self.layer_dict = {}
+        self.layers = [layer.name for layer in vgg_model.layers]
+        for layer in vgg_model.layers:
+            layer.trainable=False
+            if 'conv' in layer.name:
+                name = layer.name+'_kernel'
+                weights = layer.get_weights()[0]
+                init = tf.constant_initializer(weights)
+                self.layer_dict[name] = tf.get_variable(name, shape = weights.shape, initializer = init, trainable=False)
+                
+                name = layer.name+'_bias'
+                weights = layer.get_weights()[1]
+                init = tf.constant_initializer(weights)
+                self.layer_dict[name] = tf.get_variable(name, shape = weights.shape, initializer = init, trainable=False)
+        del vgg_model
+        gc.collect() # I got memory issues, this helps take care of it
+    
+    def conv(self,x, weights, bias):
+        y = tf.nn.conv2d(x, filter = weights, strides = [1,1,1,1],padding = 'SAME')
+        features = tf.nn.bias_add(y, bias)
+        outputs = tf.nn.relu(y)
+        return outputs
         
-        image_shape = image.shape
-        Nx,Ny = image_shape[0] // LR_dim, image_shape[1] // LR_dim
-        LR_patches = np.zeros((Ny, Nx*LR_dim, LR_dim, 3))
-        upscaled_image = np.zeros((Nx*LR_dim*4, Ny*LR_dim*4,3))
-        for y in range(Ny):
-            LR_patches[y,:,:,:] = image[y,:Nx*LR_dim,y*LR_dim:(y+1)*LR_dim,:]
-            imgs= sess.run([generator.outputs], feed_dict={LR_images : LR_patches})
-            upscaled_image[:,y*LR_dim*4:(y+1)*LR_dim*4,:] = imgs[y,:,:,:].squeeze()
-        images.append(upscaled_image)
-    return images
+    def features(self,x):
+        y = 255*(x+tf.ones_like(x))/2.
+        red, green, blue = tf.split(axis=3, num_or_size_splits=3, value=y)
+        y = tf.concat(axis=3, values=[blue - 103.939,green - 116.779,red - 123.68])
+        outputs = {}
+        for layer in self.layers:
+            if 'conv' in layer:
+                y = self.conv(y,self.layer_dict[layer+'_kernel'],self.layer_dict[layer+'_bias'])
+                outputs[layer]=y
+            if 'pool' in layer:
+                y = tf.nn.max_pool(y, ksize=[1,2, 2,1], strides=[1,2,2,1], padding='SAME')
+        return outputs
+def perception_loss_func(features_x, features_y):
+    features = list(zip(features_x, features_y))
+    loss = 0
+    for fx,fy in features:
+        loss += tf.losses.mean_squared_error(fx, fy)
+    return loss/len(features)
+

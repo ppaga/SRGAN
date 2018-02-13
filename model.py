@@ -6,8 +6,8 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 def generator(inputs, is_train=True, reuse=False):
+    c_dim = inputs.shape[-1]
     B = 16
-    c_dim = FLAGS.c_dim # n_color 3
 #    batch_size = FLAGS.batch_size # 32
     
     w_init = tf.glorot_normal_initializer()
@@ -18,47 +18,45 @@ def generator(inputs, is_train=True, reuse=False):
 #    inputs have size 32x32x3
 
 #    inputs layer
-        x = InputLayer(inputs, name='inputs')
+        LR_image = InputLayer(inputs, name='inputs')
 #        layer 0
         nf0 = 64
-        conv0 = Conv2dLayer(layer = x, shape =[9,9,c_dim, nf0], act = tf.identity, padding='SAME', name = 'conv0')
-        conv0 = PReluLayer(layer = conv0, name='prelu0')
+        x = Conv2dLayer(layer = LR_image, shape =[9,9,c_dim, nf0], act = tf.identity, padding='SAME', name = 'conv0')
+        conv0 = PReluLayer(layer = x, name='prelu0')
         
         num_conv=0
         with tf.variable_scope("resloop", reuse=reuse):
-            conv = conv0
-            res = conv0
+            x = conv0
+            y = conv0
+            z = conv0
             for i in range(B):
-                conv = Conv2dLayer(layer = conv, shape =[3,3,nf0, nf0], act = tf.identity, padding='SAME', name = 'conv'+str(num_conv))
-                bn = BatchNormLayer(layer = conv, is_train=is_train, name='bn'+str(num_conv))
-                bn = PReluLayer(layer = bn, name='prelu'+str(num_conv))
+                x = Conv2dLayer(layer = x, shape = [3,3,nf0, nf0], act = tf.identity, padding='SAME', name = 'conv'+str(num_conv))
+                x = BatchNormLayer(layer = x, is_train=is_train, name='bn'+str(num_conv))
+                x = PReluLayer(layer = x, name='prelu'+str(num_conv))
                 num_conv+=1
-                conv = Conv2dLayer(layer = bn, shape =[3,3,nf0, nf0], act = tf.nn.relu, padding='SAME', name = 'conv'+str(num_conv))
-                bn = BatchNormLayer(layer = conv, is_train=is_train, name='bn'+str(num_conv))
-                bn = PReluLayer(layer = bn, name='prelu'+str(num_conv))
+                x = Conv2dLayer(layer = x, shape =[3,3,nf0, nf0], act = tf.nn.relu, padding='SAME', name = 'conv'+str(num_conv))
+                x = BatchNormLayer(layer = x, is_train=is_train, name='bn'+str(num_conv))
+                x = PReluLayer(layer = x, name='prelu'+str(num_conv))
                 num_conv+=1
-                conv = ElementwiseLayer([bn, res], combine_fn=tf.add, name = 'add'+str(i))
-                res = conv
-        conv =  Conv2dLayer(layer = conv, shape =[3,3,nf0, nf0], act = tf.identity, padding='SAME', name = 'conv1')
-        bn = BatchNormLayer(layer = conv, is_train=is_train, name='bn1')
-        merge = ElementwiseLayer([bn, conv0], combine_fn=tf.add, name = 'add')
+                x = ElementwiseLayer([x, y], combine_fn=tf.add, name = 'add'+str(i))
+                y = x
+        x =  Conv2dLayer(layer = x, shape =[3,3,nf0, nf0], act = tf.identity, padding='SAME', name = 'conv1')
+        x = BatchNormLayer(layer = x, is_train=is_train, name='bn1')
+        x = ElementwiseLayer([x, z], combine_fn=tf.add, name = 'add')
         
         nf1 = 256
-        conv =  Conv2dLayer(layer = merge, shape =[3,3,nf0, nf1], act = tf.identity, padding='SAME', name = 'conv2')
-        SP = SubpixelConv2d(conv, scale=2, n_out_channel=None, act=tf.identity, name='subpixel_0')
-        bn = PReluLayer(layer = SP, name='prelu2')
+        x =  Conv2dLayer(layer = x, shape =[3,3,nf0, nf1], act = tf.identity, padding='SAME', name = 'conv2')
+        x = SubpixelConv2d(x, scale=2, n_out_channel=None, act=tf.identity, name='subpixel_0')
+        x = PReluLayer(layer = x, name='prelu2')
                 
         nf2 = 256
-        conv =  Conv2dLayer(layer = SP, shape = [3,3,nf1//4, nf2], act = tf.identity, padding='SAME', name = 'conv3')
-        SP = SubpixelConv2d(conv, scale=2, n_out_channel=None, act=tf.identity, name='subpixel_1')
-        bn = PReluLayer(layer = SP, name='prelu3')
+        x =  Conv2dLayer(layer = x, shape = [3,3,nf1//4, nf2], act = tf.identity, padding='SAME', name = 'conv3')
+        x = SubpixelConv2d(x, scale=2, n_out_channel=None, act=tf.identity, name='subpixel_1')
+        x = PReluLayer(layer = x, name='prelu3')
         
-        output =  Conv2dLayer(layer = SP, shape =[9,9,nf2//4, c_dim], act = tf.identity, padding='SAME', name = 'conv4')
-                
-        up_input = UpSampling2dLayer(layer = x, size=[2,2], is_scale=True, name='up_input0')
-        up_input = UpSampling2dLayer(layer = up_input, size=[2,2], is_scale=True, name='up_input1')
-
-    return output, up_input
+        x =  Conv2dLayer(layer = x, shape =[9,9,nf2//4, c_dim], act = tf.identity, padding='SAME', name = 'conv4')
+        
+    return x
 
 def discriminator(inputs, is_train=True, reuse=False):
     

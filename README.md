@@ -9,7 +9,7 @@ The network itself is mostly faithful to the original, but the number of channel
 
 python main.py
 
-on the command line, and there are a number of optional arguments which are shown in main.py using tensorflow flags (e.g. initial learning rate etc). Once the training starts, the checkpoints will be in ./checkpoints, the tensorboard logs in ./logs, and some sample images will be generated in ./samples. The pretraining has logs in ./pretrain, and if the model is called without pretraining it will be necessary to create the folders by hand and move the checkpoints in ./pretrain to the checkpoints directory. 
+on the command line, and there are a number of optional arguments which are shown in main.py using tensorflow flags (e.g. initial learning rate etc). Once the training starts, the checkpoints will be in ./runs/<run_name>/checkpoints, the tensorboard logs in ./logs, and some sample images will be generated in ./runs/<run_name>/samples. The pretraining has checkpoints in ./pretrain, and if the model is called without pretraining it will be necessary to move the pretrained network to the checkpoints directory. 
 During training, the program will save reference high-resolution images as numpy arrays in train.npy and a visualization in train.png. If training is interrupted and resumed, it will load the npy file. If the file doesn't exist, it will generate a new batch and save it.
 
 ## How to use the trained network

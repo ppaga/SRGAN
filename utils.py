@@ -46,6 +46,10 @@ class data_preprocessing():
 
 class vgg_net():
     def __init__(self, shape):
+
+#        I originally wanted to compute the feature map before the linearity is applied, so as to retain more information. This couldn't be done in keras via layer.get_output, hence the current setup. 
+#       In the end however, I decided to follow the original paper. This is still a fun exercise in combining keras with fairly basic tensorflow.
+
         vgg_model = vgg19.VGG19(include_top=False,input_shape=shape)
         self.layer_dict = {}
         self.layers = [layer.name for layer in vgg_model.layers]
@@ -61,9 +65,10 @@ class vgg_net():
                 weights = layer.get_weights()[1]
                 init = tf.constant_initializer(weights)
                 self.layer_dict[name] = tf.get_variable(name, shape = weights.shape, initializer = init, trainable=False)
+        # These two lines are mostly here for the sake of supersition.    
         del vgg_model
-        gc.collect() # I got memory issues, this helps take care of it
-    
+        gc.collect()
+        
     def conv(self,x, weights, bias):
         y = tf.nn.conv2d(x, filter = weights, strides = [1,1,1,1],padding = 'SAME')
         features = tf.nn.bias_add(y, bias)
@@ -78,7 +83,7 @@ class vgg_net():
         for layer in self.layers:
             if 'conv' in layer:
                 y = self.conv(y,self.layer_dict[layer+'_kernel'],self.layer_dict[layer+'_bias'])
-                outputs[layer]=y
+                outputs[layer]=y/12.5
             if 'pool' in layer:
                 y = tf.nn.max_pool(y, ksize=[1,2, 2,1], strides=[1,2,2,1], padding='SAME')
         return outputs

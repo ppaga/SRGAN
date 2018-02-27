@@ -17,8 +17,6 @@ The file SR.py is used to generate upscaled version of images of arbitrary size.
 python SR.py --checkpoint_dir='your path'
 since it needs to load the model from there.
 
-## What is yet to be done
-- finish training
-- test
-- post pretty pictures
-- decide on whether to include a tanh layer as the final activation function of the generator
+## S_SRGAN
+
+I added a small version of SRGAN (i.e. a version which upscales 8x8 patches to 32x32). It is much faster to train and produces fewer abberations, but cannot make use of as much contextual information (and thus even with very long training probably won't outperform bicubic upsampling much).
